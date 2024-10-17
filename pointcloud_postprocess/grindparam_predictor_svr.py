@@ -51,7 +51,7 @@ def load_scaler(use_fixed_path=False, fixed_path='saved_models/scaler.pkl'):
     #print(f"Scaler loaded from {filepath}")
     return scaler
 
-def adjust_force_with_volume_model(volume_model, volume_scaler, initial_wear, avg_rpm, predicted_grind_time, predicted_force, predicted_volume, target_volume, max_iterations=6):
+def adjust_force_with_volume_model(volume_model, volume_scaler, initial_wear, avg_rpm, predicted_grind_time, predicted_force, predicted_volume, target_volume, max_iterations=7):
     """
     Adjust the force if the grind time is lower than 10 or higher than 20,
     ensuring that the predicted volume remains constant.
@@ -69,11 +69,11 @@ def adjust_force_with_volume_model(volume_model, volume_scaler, initial_wear, av
     while iteration_count < max_iterations:
         
         # Check if the predicted volume is close enough to the original volume
-        if abs(predicted_new_volume - target_volume) < tolerance:
+        if abs(predicted_new_volume[0,0] - target_volume) < tolerance:
             break  # Stop adjusting if the volume is within tolerance
 
         # Adjust the grind time based on the difference
-        if predicted_new_volume < target_volume:
+        if predicted_new_volume[0,0] < target_volume:
             adjusted_force += 0.5  # Increase force
         else:
             adjusted_force -= 0.5  # Decrease force
@@ -82,13 +82,13 @@ def adjust_force_with_volume_model(volume_model, volume_scaler, initial_wear, av
         predicted_new_volume = predict_volume(volume_model, volume_scaler, initial_wear, avg_rpm, adjusted_force, predicted_grind_time)
         iteration_count += 1
         
-        print(f"RPM: {avg_rpm}, Force: {adjusted_force}N, Grind Time: {predicted_grind_time} sec --> Predicted Removed Volume: {predicted_new_volume}")
+        print(f"RPM: {avg_rpm}, Force: {adjusted_force}N, Grind Time: {predicted_grind_time} sec --> Predicted Removed Volume: {predicted_new_volume[0,0]}, mad_rpm: {predicted_new_volume[0,1]}")
         
         if adjusted_force <= 3.0:
             print('minimum force reached')
             adjusted_force = 3.0
             predicted_new_volume = predict_volume(volume_model, volume_scaler, initial_wear, avg_rpm, adjusted_force, predicted_grind_time)
-            print(f"RPM: {avg_rpm}, Force: {adjusted_force}N, Grind Time: {predicted_grind_time} sec --> Predicted Removed Volume: {predicted_new_volume}")
+            print(f"RPM: {avg_rpm}, Force: {adjusted_force}N, Grind Time: {predicted_grind_time} sec --> Predicted Removed Volume: {predicted_new_volume[0,0]}, mad_rpm: {predicted_new_volume[0,1]}")
             break
 
     return adjusted_force, predicted_new_volume
@@ -111,11 +111,11 @@ def adjust_time_with_volume_model(volume_model, volume_scaler, initial_wear, avg
     while iteration_count < max_iterations:
         
         # Check if the predicted volume is close enough to the original volume
-        if abs(predicted_new_volume - target_volume) < tolerance:
+        if abs(predicted_new_volume[0,0] - target_volume) < tolerance:
             break  # Stop adjusting if the volume is within tolerance
 
         # Adjust the grind time based on the difference
-        if predicted_new_volume < target_volume:
+        if predicted_new_volume[0,0] < target_volume:
             adjusted_time += 1.0  # Increase time if predicted volume is less than target volume
         else:
             adjusted_time -= 1.0  # Decrease time if predicted volume is greater than target volume
@@ -124,7 +124,7 @@ def adjust_time_with_volume_model(volume_model, volume_scaler, initial_wear, avg
         # Predict the volume with the current adjusted time
         predicted_new_volume = predict_volume(volume_model, volume_scaler, initial_wear, avg_rpm, predicted_force, adjusted_time)
 
-        print(f"RPM: {avg_rpm}, Force: {predicted_force}N, Grind Time: {adjusted_time} sec --> Predicted Removed Volume: {predicted_new_volume}")
+        print(f"RPM: {avg_rpm}, Force: {predicted_force}N, Grind Time: {adjusted_time} sec --> Predicted Removed Volume: {predicted_new_volume[0,0]}, mad_rpm: {predicted_new_volume[0,1]}")
         if adjusted_time <= 6.0:
             print('minimum time reached')
             break
@@ -145,7 +145,7 @@ def predict_volume(volume_model, volume_scaler, initial_wear, avg_rpm, avg_force
     input_scaled = volume_scaler.transform(input_df)
     input_scaled = pd.DataFrame(input_scaled, columns=input_df.columns)
     predicted_volume = volume_model.predict(input_scaled)
-    return predicted_volume[0]  # Return the predicted volume
+    return predicted_volume  # Return the predicted volume
 
 
 def main():
@@ -156,8 +156,8 @@ def main():
         # Specify the fixed model and scaler paths
         fixed_grind_model_path = 'saved_models/grindparam_model_svr_V1.pkl'
         fixed_grind_scaler_path = 'saved_models/grindparam_scaler_svr_V1.pkl'
-        fixed_volume_model_path = 'saved_models/volume_model_svr_V1.pkl'
-        fixed_volume_scaler_path = 'saved_models/volume_scaler_svr_V1.pkl'
+        fixed_volume_model_path = 'saved_models/volume_model_svr_V1_withmad.pkl'
+        fixed_volume_scaler_path = 'saved_models/volume_scaler_svr_V1_withmad.pkl'
         
         grind_model = load_model(use_fixed_path=True, fixed_path=fixed_grind_model_path)
         grind_scaler = load_scaler(use_fixed_path=True, fixed_path=fixed_grind_scaler_path)
@@ -172,7 +172,7 @@ def main():
 
     #read current belt's 'initial wear', 'removed_volume', 'RPM' and predict 'Force' and 'grind_time'
     initial_wear = 20000000           
-    target_volume = 60      # in mm^3
+    target_volume = 100      # in mm^3
     avg_rpm = 9500
 
     # Create a DataFrame to store the input data
@@ -199,7 +199,7 @@ def main():
     # TODO use predicted force and time to input into volume_model_svr which predict volume_lost
     # Predict volume
     predicted_volume = predict_volume(volume_model, volume_scaler, initial_wear, avg_rpm, predicted_force, predicted_grind_time)
-    print(f"RPM: {avg_rpm}, Force: {predicted_force}N, Grind Time: {predicted_grind_time} sec --> Predicted Removed Volume: {predicted_volume[0]}")
+    print(f"RPM: {avg_rpm}, Force: {predicted_force}N, Grind Time: {predicted_grind_time} sec --> Predicted Removed Volume: {predicted_volume[0, 0]}, mad_rpm: {predicted_volume[0, 1]}")
 
     # TODO adjust force and time for good grind and accurate volume with volume model
     adjusted_force, predicted_volume = adjust_force_with_volume_model(volume_model, volume_scaler, initial_wear, avg_rpm, predicted_grind_time, predicted_force, predicted_volume, target_volume)

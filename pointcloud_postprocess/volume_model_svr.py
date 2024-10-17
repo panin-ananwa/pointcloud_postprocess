@@ -181,13 +181,13 @@ def main():
     print(grind_data)
 
     #drop unrelated columns
-    related_columns = [ 'grind_time', 'avg_rpm', 'avg_force', 'initial_wear', 'removed_material']
+    related_columns = [ 'grind_time', 'avg_rpm', 'mad_rpm', 'avg_force', 'initial_wear', 'removed_material']
     grind_data = grind_data[related_columns]
 
     
 
     #desired output
-    target_columns = ['removed_material']
+    target_columns = ['removed_material', 'mad_rpm']
 
     # Preprocess the data (train the model using the CSV data, for example)
     X_train, X_test, y_train, y_test, scaler = preprocess_data(grind_data, target_columns)
@@ -201,7 +201,7 @@ def main():
     evaluate_model(best_model, X_test, y_test)
  
     #save model
-    save_model(best_model, scaler, folder_name='saved_models', modelname='volume_model_svr_V1.pkl', scalername='volume_scaler_svr_V1.pkl')
+    save_model(best_model, scaler, folder_name='saved_models', modelname='volume_model_svr_V1_withmad.pkl', scalername='volume_scaler_svr_V1_withmad.pkl')
 
     '''
     latest model with data gathering 2
